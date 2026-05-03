@@ -1,65 +1,139 @@
-import Image from "next/image";
+import { agents, devices, activities, sessions } from "@/lib/data";
+import { Bot, Monitor, Zap, MessageSquare, Cpu } from "lucide-react";
+import StatusDot from "@/components/StatusDot";
+import StatusBadge from "@/components/StatusBadge";
+import Link from "next/link";
 
-export default function Home() {
+function fmtTime(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
+  if (diff < 60) return `${diff}秒前`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}分前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}時間前`;
+  return `${Math.floor(diff / 86400)}日前`;
+}
+
+function fmtTokens(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
+  return String(n);
+}
+
+const activityIcons: Record<string, string> = {
+  "email-check": "📧",
+  "ad-monitor": "📈",
+  heartbeat: "💓",
+  relay: "🔀",
+  healthcheck: "🛡",
+  coding: "💻",
+  "pr-review": "👁",
+  "pr-creation": "🔀",
+  webhook: "🪝",
+  query: "💬",
+  development: "🚀",
+  default: "⚡",
+};
+
+export default function Dashboard() {
+  const activeAgents = agents.filter((a) => a.status === "active").length;
+  const onlineDevices = devices.filter((d) => d.status === "online").length;
+  const activeSessions = sessions.filter((s) => s.status === "active").length;
+  const totalTokens = sessions.reduce((sum, s) => sum + s.tokenUsed, 0);
+  const recentActivities = [...activities]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 8);
+
+  const stats = [
+    { label: "エージェント", value: agents.length, sub: `${activeAgents}稼働中`, icon: Bot, color: "text-violet-400" },
+    { label: "デバイス", value: devices.length, sub: `${onlineDevices}オンライン`, icon: Monitor, color: "text-blue-400" },
+    { label: "セッション", value: sessions.length, sub: `${activeSessions}アクティブ`, icon: Zap, color: "text-yellow-400" },
+    { label: "メッセージ", value: sessions.reduce((s, x) => s + x.messages, 0), sub: "累計", icon: MessageSquare, color: "text-emerald-400" },
+    { label: "トークン使用量", value: fmtTokens(totalTokens), sub: "全セッション合計", icon: Cpu, color: "text-pink-400" },
+  ];
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="p-8">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-zinc-100">ダッシュボード</h1>
+        <p className="text-sm text-zinc-500 mt-1">エージェント・デバイス稼働状況の概要</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-5 gap-4 mb-8">
+        {stats.map(({ label, value, sub, icon: Icon, color }) => (
+          <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-zinc-500">{label}</span>
+              <Icon size={16} className={color} />
+            </div>
+            <div className="text-2xl font-bold text-zinc-100">{value}</div>
+            <div className="text-xs text-zinc-500 mt-1">{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-5 gap-6">
+        {/* Agent grid */}
+        <div className="col-span-3">
+          <h2 className="text-sm font-medium text-zinc-400 mb-3">エージェント一覧</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {agents.map((agent) => {
+              const device = devices.find((d) => d.id === agent.deviceId);
+              return (
+                <Link
+                  key={agent.id}
+                  href={`/agents/${agent.id}`}
+                  className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 hover:border-zinc-700 transition-colors group"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <StatusDot status={agent.status} pulse />
+                      <span className="text-sm font-medium text-zinc-200 group-hover:text-white">{agent.name}</span>
+                    </div>
+                    <StatusBadge status={agent.status} />
+                  </div>
+                  <div className="text-xs text-zinc-500 mb-2 font-mono">{agent.llm}</div>
+                  <div className="flex items-center gap-1 text-xs text-zinc-600">
+                    <Monitor size={11} />
+                    {device?.name ?? "不明"}
+                  </div>
+                  <div className="mt-2 text-xs text-zinc-600">{agent.skillIds.length} スキル</div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Activity feed */}
+        <div className="col-span-2">
+          <h2 className="text-sm font-medium text-zinc-400 mb-3">最近のアクティビティ</h2>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800">
+            {recentActivities.map((act) => {
+              const agent = agents.find((a) => a.id === act.agentId);
+              const icon = activityIcons[act.type] ?? activityIcons.default;
+              return (
+                <div key={act.id} className="px-4 py-3">
+                  <div className="flex items-start gap-2.5">
+                    <span className="text-sm mt-0.5">{icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-zinc-300 leading-snug line-clamp-2">{act.summary}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-zinc-600">{agent?.name}</span>
+                        <span className="text-zinc-700">·</span>
+                        <span className="text-xs text-zinc-600">{fmtTime(act.createdAt)}</span>
+                        {act.status === "error" && (
+                          <span className="text-xs text-red-400">⚠ エラー</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
